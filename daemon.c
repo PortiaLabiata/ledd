@@ -9,6 +9,7 @@
 
 #include <sys/socket.h>
 #include <sys/timerfd.h>
+#include <sys/signalfd.h>
 #include <sys/poll.h>
 #include <sys/un.h>
 
@@ -26,8 +27,6 @@ typedef struct {
     Value value;
 } Context;
 
-static volatile sig_atomic_t term_flag = 0;
-
 static void cleanup(int sockfd)
 {
     led_write(0);
@@ -38,12 +37,6 @@ static void cleanup(int sockfd)
         close(sockfd);
         unlink(SOCK_NAME);
     }
-}
-
-void sighandler(int signum)
-{
-    (void)signum;
-    term_flag = 1;
 }
 
 void tms2timespec(struct timespec *ts, unsigned int tms)
@@ -184,6 +177,31 @@ int init_timer()
     return timerfd;
 }
 
+int init_sigfd()
+{
+    sigset_t sigset; 
+
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGINT);
+    sigaddset(&sigset, SIGTERM);
+    sigaddset(&sigset, SIGQUIT);
+
+    if (sigprocmask(SIG_BLOCK, &sigset, NULL) < 0)
+    {
+        perror("Failed to block signals");
+        return -1;
+    }
+
+    int sigfd = signalfd(-1, &sigset, 0);
+    if (sigfd < 0)
+    {
+        perror("Failed to open sigfd");
+        return -1;
+    }
+
+    return sigfd;
+}
+
 void handle_timer(Context *ctx)
 {
     if (ctx->state == BLINKING)
@@ -199,9 +217,6 @@ void handle_timer(Context *ctx)
 int main(int argc, char **argv)
 {
     (void)argc; (void)argv;
-
-    signal(SIGINT, sighandler);
-    signal(SIGTERM, sighandler);
 
     if (led_begin() < 0)
     {
@@ -228,17 +243,27 @@ int main(int argc, char **argv)
         return -1;
     }
 
+    int sigfd = init_sigfd();
+    if (sigfd < 0)
+    {
+        cleanup(sockfd);
+        return -1;
+    }
+
     Datagram dgram = {0};
 
-    struct pollfd fds[2] = {0};
+    struct pollfd fds[3] = {0};
     fds[0].fd = sockfd;
     fds[1].fd = ctx.timerfd;
+    fds[2].fd = sigfd;
+
     fds[0].events = POLLIN;
     fds[1].events = POLLIN;
+    fds[2].events = POLLIN;
 
-    while (!term_flag)
+    while (1)
     {
-        int nfds = poll(fds, 2, -1);
+        int nfds = poll(fds, 3, -1);
         if (nfds > 0)
         {
             if (fds[1].revents & POLLIN)
@@ -253,6 +278,7 @@ int main(int argc, char **argv)
                     break;
                 }
                 handle_timer(&ctx);
+                led_write(ctx.value);
             }
 
             if (fds[0].revents & POLLIN)
@@ -265,8 +291,14 @@ int main(int argc, char **argv)
                 }
 
                 (void)handle_dgram(&ctx, &dgram);
+                led_write(ctx.value);
             }
-            led_write(ctx.value);
+            
+            if (fds[2].revents & POLLIN)
+            {
+                fds[2].revents = 0;
+                break;
+            }
         }
     }
     
