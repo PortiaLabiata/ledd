@@ -1,0 +1,25 @@
+#!/bin/sh
+
+function start() {
+    /opt/ledd &
+}
+
+function stop() {
+    killall ledd
+}
+
+if [ $# -eq 1 ]; then
+    echo "Invalid number of arguments"
+fi
+
+case "$1" in
+    "start")
+        start &
+        ;;
+    "stop")
+        stop &
+        ;;
+    *)
+        echo "Invalid command"
+        ;;
+esac
