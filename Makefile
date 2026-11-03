@@ -9,14 +9,19 @@ LDFLAGS := -L$(LIB)/build/lib -lgpiod
 
 SRCS_DAEMON := daemon.c led.c
 SRCS_APP := app.c
+SRCS_CGI := cgi.c
+
 OBJS_DAEMON := $(SRCS_DAEMON:.c=.o)
 OBJS_APP := $(SRCS_APP:.c=.o)
+OBJS_CGI := $(SRCS_CGI:.c=.o)
+
 TARGET_DAEMON := ledd
 TARGET_APP := led
+TARGET_CGI := index.cgi
 
 .PHONY: all clean flash
 
-all: $(TARGET_DAEMON) $(TARGET_APP)
+all: $(TARGET_DAEMON) $(TARGET_APP) $(TARGET_CGI)
 
 $(TARGET_APP): $(OBJS_APP)
 	$(LD) $(OBJS_APP) $(LDFLAGS) -o $(TARGET_APP)
@@ -24,12 +29,16 @@ $(TARGET_APP): $(OBJS_APP)
 $(TARGET_DAEMON): $(OBJS_DAEMON)
 	$(LD) $(OBJS_DAEMON) $(LDFLAGS) -o $(TARGET_DAEMON)
 
+$(TARGET_CGI): $(OBJS_CGI)
+	$(LD) $(OBJS_CGI) $(LDFLAGS) -o $(TARGET_CGI)
+
 %.o: %.c
 	$(CC) $(CFLAGS) $< -c -o $@
 
 flash: $(TARGET)
 	adb push $(TARGET_DAEMON) /opt
 	adb push $(TARGET_APP) /usr/bin
+	adb push $(TARGET_CGI) /var/www/cgi-bin
 
 clean:
 	rm *.o $(TARGET_APP) $(TARGET_DAEMON)
