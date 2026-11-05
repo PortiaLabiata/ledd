@@ -7,6 +7,7 @@ typedef enum {
     COMMAND_ON,
     COMMAND_OFF,
     COMMAND_BLINK,
+    COMMAND_INVALID
 } Command;
 
 typedef union {
