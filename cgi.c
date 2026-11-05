@@ -51,12 +51,12 @@ int handle_get(char *request, Command *cmd, unsigned int *arg)
 {
     static const size_t MAX_SUBTOKEN_LEN = 64;
 
-    ParserState state = KEY;
     char *str1, *str2;
     char *save1, *save2;
 
     for (str1 = request; ; str1 = NULL)
     {
+        ParserState state = KEY;
         char *token = strtok_r(str1, "&", &save1);
         if (!token)
         {
@@ -168,14 +168,15 @@ int main(int argc, char **argv)
     {
         char *request = getenv("QUERY_STRING");
 
-        Command cmd = COMMAND_OFF;
+        Command cmd = COMMAND_INVALID;
         unsigned int arg = 0;
 
         if (!request)
         {
             printf("Failed to read request\n");
         } 
-        else if (handle_get(request, &cmd, &arg) < 0)
+        else if (handle_get(request, &cmd, &arg) < 0 &&
+                cmd != COMMAND_INVALID)
         {
             printf("Failed to execute command: %s<br>",
                    strerror(errno));
